@@ -22,7 +22,7 @@ The Multi-AUV Formation Control System is built with a layered architecture that
 ┌─────────────────────────────────────────────────────────┐
 │                 Multi-AUV Formation System              │
 ├─────────────────────────────────────────────────────────┤
-│  🎯 Mission Layer                                       │
+│  🎯 Mission Layer                                      │
 │    ├── formation_mission_runner.py (Mission control)    │
 │    └── launch_formation_control.py (Auto launcher)     │
 ├─────────────────────────────────────────────────────────┤
@@ -58,30 +58,57 @@ This implementation is based on the Multi-Agent Deep Deterministic Policy Gradie
 
 **Formation Configuration:**
 - **AUV1 (Leader)**: Executes predefined trajectories (sine wave, waypoint, or custom paths)
-- **AUV2 (Follower 1)**: Δ₁₂ = (-5, 2) m (5m behind, 2m to port of leader)
-- **AUV3 (Follower 2)**: Δ₁₃ = (-5, -2) m (5m behind, 2m to starboard of leader)
+  - Position: `P₁(t) = [x₁(t), y₁(t), z₁(t)]`
+  - Orientation: `ψ₁(t)` (yaw angle)
+- **AUV2 (Follower 1)**: Δ₁₂ = (-5, 2, 0) m (5m behind, 2m to port of leader)
+  - Desired position: `P₂,des(t) = P₁(t) + R(ψ₁(t)) * Δ₁₂`
+  - Where `R(ψ₁(t)) = [[cos(ψ₁), -sin(ψ₁), 0], [sin(ψ₁), cos(ψ₁), 0], [0, 0, 1]]`
+- **AUV3 (Follower 2)**: Δ₁₃ = (-5, -2, 0) m (5m behind, 2m to starboard of leader)
+  - Desired position: `P₃,des(t) = P₁(t) + R(ψ₁(t)) * Δ₁₃`
 
 **Control Algorithm:**
 ```
-v_j(t) = v_leader(t) + K_p * (η_j,des(t) - η_j(t))
+v_j(t) = v_leader(t) + K_p * (η_j,des(t) - η_j(t)) + K_d * (η̇_j,des(t) - η̇_j(t))
 ```
 
 Where:
-- `v_j(t)`: Velocity command for follower j
-- `v_leader(t)`: Leader velocity (acquired from odometry)
-- `K_p`: Proportional gain (tuned to prevent oscillations)
-- `η_j,des(t)`: Desired position of follower j in formation
-- `η_j(t)`: Current position of follower j
+- `v_j(t)`: Velocity command for follower j at time t
+- `v_leader(t)`: Leader velocity vector (acquired from odometry) = [v_x, v_y, v_z, ω_z]
+- `K_p`: Proportional gain matrix (tuned to prevent oscillations) = diag([k_px, k_py, k_pz, k_pω])
+- `K_d`: Derivative gain matrix (for damping) = diag([k_dx, k_dy, k_dz, k_dω])
+- `η_j,des(t)`: Desired position of follower j in formation = [x_des, y_des, z_des, ψ_des]
+- `η_j(t)`: Current position of follower j = [x_j, y_j, z_j, ψ_j]
+- `η̇_j,des(t)`: Desired velocity of follower j in formation
+- `η̇_j(t)`: Current velocity of follower j
 
 **RBF Network Actor (Advanced Implementation):**
-- Input state: `s_j = [x_j, y_j, vx_j, vy_j, x_1-x_j, y_1-y_j]`
-- RBF activation: `φ_k(s) = exp(-γ |s - c_k|²)`
-- Output action: `a_j = W^T * Φ(s_j) + b`
+- Input state: `s_j = [x_j, y_j, z_j, vx_j, vy_j, vz_j, x_1-x_j, y_1-y_j, z_1-z_j, ψ_j, ψ_1-ψ_j]`
+- RBF activation: `φ_k(s) = exp(-γ_k * ||s - c_k||²)`
+- Weight vector: `W = [w_1, w_2, ..., w_n]^T`
+- Bias vector: `b = [b_x, b_y, b_z, b_ψ]^T`
+- RBF layer output: `Φ(s_j) = [φ_1(s_j), φ_2(s_j), ..., φ_n(s_j)]^T`
+- Output action: `a_j = W^T * Φ(s_j) + b = Σ(i=1 to n) w_i * φ_i(s_j) + b`
 
 **Reward Function:**
 ```
-r_j = -α * e_j² - β * (collision_penalty) - γ * |a_j|²
+r_j(t) = -α * ||e_j(t)||² - β * C_j(t) - γ * ||a_j(t)||² + δ * R_formation(t) + ε * R_smooth(t)
 ```
+
+Where:
+- `r_j(t)`: Reward for agent j at time t
+- `α`: Formation error penalty weight (typically α = 1.0)
+- `e_j(t)`: Formation error vector = η_j,des(t) - η_j(t)
+- `||e_j(t)||²`: Squared formation error = (x_error² + y_error² + z_error²)
+- `β`: Collision penalty weight (typically β = 10.0)
+- `C_j(t)`: Collision penalty = max(0, d_safe - d_min(t))
+- `d_safe`: Safe distance threshold (typically 2.0m)
+- `d_min(t)`: Minimum distance to other AUVs
+- `γ`: Action penalty weight (typically γ = 0.1)
+- `||a_j(t)||²`: Squared action magnitude for energy efficiency
+- `δ`: Formation bonus weight (typically δ = 0.5)
+- `R_formation(t)`: Formation maintenance bonus = exp(-||e_j(t)||)
+- `ε`: Smoothness bonus weight (typically ε = 0.2)
+- `R_smooth(t)`: Action smoothness bonus = -||a_j(t) - a_j(t-1)||²
 
 ### Formation Layout
 ```
@@ -241,11 +268,18 @@ ros2 topic pub /auv3/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.1}, angular
 
 ### Mission Types Detailed
 
-| Mission Type | Description | Use Case | Duration |
-|--------------|-------------|----------|----------|
-| **Basic Maneuvers** | Simple forward/turn/circle patterns | Formation testing and validation | 2-5 min |
-| **Waypoint Trajectory** | (0,0)→(20,-13)→(10,-23)→(-10,-8)→(0,0) × 2 | Algorithm performance evaluation | 8-12 min |
-| **Sine Wave** | x₁(t)=v*t, y₁(t)=A*sin(ω*t) | Smooth trajectory following | Continuous |
+| Mission Type | Description | Mathematical Expression | Use Case | Duration |
+|--------------|-------------|------------------------|----------|----------|
+| **Basic Maneuvers** | Simple forward/turn/circle patterns | `v(t) = v_const`, `ω(t) = ω_const` | Formation testing and validation | 2-5 min |
+| **Waypoint Trajectory** | (0,0)→(20,-13)→(10,-23)→(-10,-8)→(0,0) × 2 | `P_target(i) = [x_i, y_i, z_i]`, where i ∈ {0,1,2,3,4} | Algorithm performance evaluation | 8-12 min |
+| **Sine Wave** | Sinusoidal motion with constant forward velocity | `x₁(t) = v_forward * t`, `y₁(t) = A * sin(ω * t + φ)`, `z₁(t) = z_const` | Smooth trajectory following | Continuous |
+
+**Sine Wave Parameters:**
+- `v_forward`: Forward velocity (typically 0.5 m/s)
+- `A`: Amplitude of sine wave (typically 5.0 m)
+- `ω`: Angular frequency = 2π/T, where T is period (typically 20s)
+- `φ`: Phase offset (typically 0)
+- `z_const`: Constant depth (typically -5.0 m)
 
 ## Configuration & Tuning
 
@@ -471,9 +505,14 @@ orca_description/
 
 #### Formation Control Performance
 - **Formation Error**: Target < 1.0m RMS during steady-state
+  - RMS Error: `E_RMS = √(1/N * Σ(i=1 to N) ||e_i||²)`
+  - Where `e_i = P_i,des - P_i,actual` for each follower AUV
 - **Response Time**: < 2.0 seconds to leader commands
+  - Response time: `t_response = min{t : ||e(t)|| < 0.1 * ||e(0)||}`
 - **Tracking Accuracy**: < 0.5m deviation from desired trajectory
+  - Tracking error: `E_track = max{||P_leader,actual(t) - P_leader,desired(t)||} over mission`
 - **Collision Avoidance**: Maintains > 2.0m minimum inter-vehicle distance
+  - Safety metric: `d_min(t) = min{||P_i(t) - P_j(t)||} for all i≠j`
 
 #### System Performance
 - **Control Loop Frequency**: 20Hz (consistent with base_controller)
@@ -737,7 +776,9 @@ formation_offsets = {
 ```python
 # Modify formation_controller.py
 def calculate_line_formation(leader_pos, leader_yaw):
-    """Create single-file line formation"""
+    """Create single-file line formation
+    Mathematical model: P_i = P_leader + R(ψ_leader) * [-(i*spacing), 0, 0]
+    """
     spacing = 6.0  # Distance between AUVs
     formations = {}
     for i, auv_id in enumerate(['auv2', 'auv3', 'auv4']):
@@ -751,7 +792,13 @@ def calculate_line_formation(leader_pos, leader_yaw):
 #### Diamond Formation
 ```python
 def calculate_diamond_formation(leader_pos, leader_yaw):
-    """Create diamond formation with leader at front"""
+    """Create diamond formation with leader at front
+    Mathematical model: 
+    - P_left = P_leader + R(ψ) * [-d*cos(θ), d*sin(θ), 0]
+    - P_right = P_leader + R(ψ) * [-d*cos(θ), -d*sin(θ), 0]  
+    - P_tail = P_leader + R(ψ) * [-2d, 0, 0]
+    Where d = formation_distance, θ = formation_angle
+    """
     formations = {
         'auv2': (-4, 3),    # Left wing
         'auv3': (-4, -3),   # Right wing
@@ -763,7 +810,14 @@ def calculate_diamond_formation(leader_pos, leader_yaw):
 #### V-Formation (Bird Flight Pattern)
 ```python
 def calculate_v_formation(leader_pos, leader_yaw):
-    """Create V-formation for efficient movement"""
+    """Create V-formation for efficient movement
+    Mathematical model: V-shape with angle α between arms
+    - Left arm: P_i = P_leader + R(ψ) * [-i*d*cos(α/2), i*d*sin(α/2), 0]
+    - Right arm: P_j = P_leader + R(ψ) * [-j*d*cos(α/2), -j*d*sin(α/2), 0]
+    Where α = V_angle (typically 60°), d = spacing between AUVs
+    """
+    v_angle = math.pi/3  # 60 degrees
+    spacing = 3.0
     formations = {
         'auv2': (-3, 4),    # Left arm of V
         'auv3': (-3, -4),   # Right arm of V
@@ -865,22 +919,36 @@ class ObstacleAvoidanceFormation:
         self.avoidance_gain = 2.0
         
     def calculate_avoidance_force(self, auv_pos, obstacles):
-        """Calculate repulsive force from nearby obstacles"""
+        """Calculate repulsive force from nearby obstacles
+        Mathematical model: F_avoid = Σ(k_avoid * (1/d² - 1/d_max²) * û_i)
+        Where:
+        - F_avoid: Total avoidance force vector
+        - k_avoid: Avoidance gain constant
+        - d: Distance to obstacle i
+        - d_max: Maximum detection range
+        - û_i: Unit vector pointing away from obstacle i
+        """
         avoidance_force = np.array([0.0, 0.0])
         
         for obstacle in obstacles:
             distance = np.linalg.norm(auv_pos - obstacle)
-            if distance < self.obstacle_detection_range:
-                # Repulsive force inversely proportional to distance
-                direction = (auv_pos - obstacle) / distance
+            if distance < self.obstacle_detection_range and distance > 0:
+                # Repulsive force inversely proportional to distance squared
+                direction = (auv_pos - obstacle) / distance  # Unit vector away from obstacle
                 force_magnitude = self.avoidance_gain / (distance**2)
-                avoidance_force += direction * force_magnitude
+                # Add exponential decay for smoother transitions
+                decay_factor = np.exp(-(distance / self.obstacle_detection_range))
+                avoidance_force += direction * force_magnitude * decay_factor
                 
         return avoidance_force
     
     def modify_formation_with_avoidance(self, formation_command, avoidance_force):
-        """Combine formation control with obstacle avoidance"""
-        return formation_command + avoidance_force
+        """Combine formation control with obstacle avoidance
+        Final command: u_total = u_formation + α * u_avoidance
+        Where α is blending factor (typically 0.3-0.7)
+        """
+        alpha = 0.5  # Blending factor
+        return formation_command + alpha * avoidance_force
 ```
 
 ### Multi-Level Control Architecture
