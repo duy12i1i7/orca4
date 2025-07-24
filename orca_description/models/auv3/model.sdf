@@ -374,6 +374,7 @@
       <!-- Port settings for AUV3 (I2) -->
       <fdm_addr>127.0.0.1</fdm_addr>
       <fdm_port_in>9022</fdm_port_in>
+      <fdm_port_out>9023</fdm_port_out>
       <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
       <lock_step>1</lock_step>
 
