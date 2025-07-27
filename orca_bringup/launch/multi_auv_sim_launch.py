@@ -142,7 +142,7 @@ def generate_launch_description():
         ExecuteProcess(
             cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file,
                  '-I1', '--home', '33.810313,-118.39386700000001,0.0,0',
-                 '--serial0', 'tcp:5761'],
+                 '--serial1', 'tcp:5770'],
             output='screen',
             condition=IfCondition(LaunchConfiguration('ardusub')),
         ),
@@ -151,7 +151,7 @@ def generate_launch_description():
         ExecuteProcess(
             cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file,
                  '-I2', '--home', '33.810313,-118.39386700000001,0.0,0',
-                 '--serial0', 'tcp:5762'],
+                 '--serial2', 'tcp:5780'],
             output='screen',
             condition=IfCondition(LaunchConfiguration('ardusub')),
         ),
