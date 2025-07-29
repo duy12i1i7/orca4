@@ -42,9 +42,9 @@ class FormationMissionRunner(Node):
         self.auv2_mavros_state = None
         self.auv3_mavros_state = None
         
-        self.auv1_state_sub = self.create_subscription(State, '/auv1/mavros/state', self.auv1_state_callback, 10)
-        self.auv2_state_sub = self.create_subscription(State, '/auv2/mavros/state', self.auv2_state_callback, 10)
-        self.auv3_state_sub = self.create_subscription(State, '/auv3/mavros/state', self.auv3_state_callback, 10)
+        self.auv1_state_sub = self.create_subscription(State, '/auv1/mavros/state', self.auv1_state_callback, 100)
+        self.auv2_state_sub = self.create_subscription(State, '/auv2/mavros/state', self.auv2_state_callback, 100)
+        self.auv3_state_sub = self.create_subscription(State, '/auv3/mavros/state', self.auv3_state_callback, 100)
         
         self.get_logger().info('Formation Mission Runner initialized')
         self.get_logger().info('Controlling AUV1 (leader), followers will maintain formation')
@@ -58,7 +58,7 @@ class FormationMissionRunner(Node):
     def auv3_state_callback(self, msg):
         self.auv3_mavros_state = msg
 
-    def wait_for_connections(self, timeout=30.0):
+    def wait_for_connections(self, timeout=150.0):
         """Wait for base controller connection services to be available"""
         self.get_logger().info('Waiting for base controller connection services...')
         
@@ -129,7 +129,7 @@ class FormationMissionRunner(Node):
         self.get_logger().info('Checking MAVROS connections...')
         
         # Wait a bit for state messages
-        time.sleep(60.0)
+        time.sleep(0.5)
         
         if self.auv1_mavros_state:
             self.get_logger().info(f'AUV1 MAVROS - Connected: {self.auv1_mavros_state.connected}, Armed: {self.auv1_mavros_state.armed}, Mode: {self.auv1_mavros_state.mode}')
