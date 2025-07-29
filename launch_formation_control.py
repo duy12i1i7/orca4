@@ -216,7 +216,7 @@ class FormationLauncher:
             controller_process = self.launch_formation_controller()
             
             print(f"\n⏳ Waiting 5 seconds for formation controller to initialize...")
-            time.sleep(100)
+            time.sleep(5)
             
             # Launch mission runner
             mission_process = self.launch_mission_runner()
