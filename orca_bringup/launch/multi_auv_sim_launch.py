@@ -23,8 +23,10 @@ def generate_launch_description():
     orca_description_dir = get_package_share_directory('orca_description')
 
     # ArduSub parameters for each vehicle
-    ardusub_params_file = os.path.join(orca_bringup_dir, 'cfg', 'sub.parm')
-    
+    ardusub_params_file0 = os.path.join(orca_bringup_dir, 'cfg', 'sub0.parm')
+    ardusub_params_file1 = os.path.join(orca_bringup_dir, 'cfg', 'sub1.parm')
+    ardusub_params_file2 = os.path.join(orca_bringup_dir, 'cfg', 'sub2.parm')
+
     # MAVROS parameters for each vehicle
     auv1_mavros_params_file = os.path.join(orca_bringup_dir, 'params', 'auv1_mavros_params.yaml')
     auv2_mavros_params_file = os.path.join(orca_bringup_dir, 'params', 'auv2_mavros_params.yaml')
@@ -131,27 +133,27 @@ def generate_launch_description():
 
         # Launch ArduSub for AUV1 (I0) - Leader
         ExecuteProcess(
-            cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file,
+            cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file0,
                  '-I0', '--home', '33.810313,-118.39386700000001,0.0,0',
-                 '--serial0', 'tcp:5760'],
+                 '--serial0', '--out=tcp:127.0.0.1:5760'],
             output='screen',
             condition=IfCondition(LaunchConfiguration('ardusub')),
         ),
 
         # Launch ArduSub for AUV2 (I1) - Follower
         ExecuteProcess(
-            cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file,
+            cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file1,
                  '-I1', '--home', '33.810313,-118.39386700000001,0.0,0',
-                 '--serial1', 'tcp:5770'],
+                 '--serial1', '--out=tcp:127.0.0.1:5770'],
             output='screen',
             condition=IfCondition(LaunchConfiguration('ardusub')),
         ),
 
         # Launch ArduSub for AUV3 (I2) - Follower
         ExecuteProcess(
-            cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file,
+            cmd=['ardusub', '-S', '-w', '-M', 'JSON', '--defaults', ardusub_params_file2,
                  '-I2', '--home', '33.810313,-118.39386700000001,0.0,0',
-                 '--serial2', 'tcp:5780'],
+                 '--serial2', '--out=tcp:127.0.0.1:5780'],
             output='screen',
             condition=IfCondition(LaunchConfiguration('ardusub')),
         ),

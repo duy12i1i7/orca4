@@ -129,7 +129,7 @@ class FormationMissionRunner(Node):
         self.get_logger().info('Checking MAVROS connections...')
         
         # Wait a bit for state messages
-        time.sleep(2.0)
+        time.sleep(60.0)
         
         if self.auv1_mavros_state:
             self.get_logger().info(f'AUV1 MAVROS - Connected: {self.auv1_mavros_state.connected}, Armed: {self.auv1_mavros_state.armed}, Mode: {self.auv1_mavros_state.mode}')
